@@ -1,0 +1,52 @@
+name: Deploy misch.ke
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: misch-ke-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify website files
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f script.js
+
+      - name: Deploy to Contabo
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'README.md' \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            ./ sebastian@207.180.209.119:/var/www/misch.ke/
